@@ -4,62 +4,56 @@ using System.Linq;
 using BladeAndSoulGossipCards;
 using BladeAndSoulGossipCards.Extend;
 using System.Collections.Generic;
+using Regulus.Extension;
 public class Core : MonoBehaviour 
 {
-    public GameObject PropertyFilter;
-    public GameObject SuitFilter;
-    public GameObject Result;
+    
     public TextAsset Data;
     void Awake()
     {
+        GameObject.DontDestroyOnLoad(gameObject);
         BladeAndSoulGossipCards.CardSet.Instance.Build(Data.text);
+        _Cards = BladeAndSoulGossipCards.CardSet.Instance.Cards;
     }
 	// Use this for initialization
 	void Start () 
     {
-        ToSuitFilter();
+        
 	}
 
-    private void ToSuitFilter()
-    {
-        var instance = GameObject.Instantiate(SuitFilter) as GameObject;
-        instance.transform.localScale = Vector3.one;
-    }
+    
 	
 	// Update is called once per frame
 	void Update () {
 	
 	}
 
-    public void ToPropertyFilter()
-    {
-        var instance = GameObject.Instantiate(PropertyFilter) as GameObject;
-        instance.transform.localScale = Vector3.one;
-    }
+    
 
     static public Core Instance 
     {
         get {
+            if (GameObject.FindObjectOfType<Core>() == null)
+            {
+                var instance = GameObject.Instantiate(Resources.Load("Core")) as GameObject;
+                return instance.GetComponent<Core>();
+            }
             return GameObject.FindObjectOfType<Core>();
         }
     }
-    string[] _Suits;
-    private InitProperty.Condition[] _Conditions;
+    
+    private BladeAndSoulGossipCards.PropertyValue[] _Conditions;
     internal void SetSuits(string[] suits)
     {
-        _Suits = suits;
+        
     }
 
-    internal void SetPropertys(InitProperty.Condition[] condition)
+    internal void SetPropertys(BladeAndSoulGossipCards.PropertyValue[] condition)
     {
         _Conditions = condition;
     }
 
-    internal void ToResult()
-    {
-        var instance = GameObject.Instantiate(Result) as GameObject;
-        instance.transform.localScale = Vector3.one;
-    }
+    
 
     internal void QueryResult(System.Action<Suit[]> suit_callback)
     {
@@ -68,11 +62,11 @@ public class Core : MonoBehaviour
 
     IEnumerator _QueryResult(System.Action<Suit[]> suit_callback)
     {
-        var propertyValues = (from c in _Conditions select new BladeAndSoulGossipCards.PropertyValue { Id = c.Property, Value = c.Value }).ToArray();
+        var propertyValues = _Conditions;// (from c in _Conditions select new BladeAndSoulGossipCards.PropertyValue { Id = c.Id, Value = c.Value }).ToArray();
 
-        BladeAndSoulGossipCards.CardSet set = BladeAndSoulGossipCards.CardSet.Instance;
-        var cards = set.Find(propertyValues, _Suits);
-
+        //BladeAndSoulGossipCards.CardSet set = BladeAndSoulGossipCards.CardSet.Instance;
+        var cards = BladeAndSoulGossipCards.CardSet.Instance.Filter(_Cards, propertyValues);
+        
         Card[] cards1 = cards.Assort(1).Fill(CardSet.Instance, 1);
         Card[] cards2 = cards.Assort(2).Fill(CardSet.Instance, 2);
         Card[] cards3 = cards.Assort(3).Fill(CardSet.Instance, 3);
@@ -83,8 +77,8 @@ public class Core : MonoBehaviour
         Card[] cards8 = cards.Assort(8).Fill(CardSet.Instance, 8);
         Regulus.Utility.TimeCounter timeCounter = new Regulus.Utility.TimeCounter();
         List<Suit> suits = new List<Suit>();
-        System.Int64 total = cards1.Count() * cards2.Count() * cards3.Count() * cards4.Count() * cards5.Count() * cards6.Count() * cards7.Count() * cards8.Count();
-        int count = 0;
+        CalculationAmount = cards1.Count() * cards2.Count() * cards3.Count() * cards4.Count() * cards5.Count() * cards6.Count() * cards7.Count() * cards8.Count();
+        CalculationCount = 0;
         Property[] propertys = propertyValues.ToArray();
         foreach (var card1 in cards1)
             foreach (var card2 in cards2)
@@ -95,7 +89,7 @@ public class Core : MonoBehaviour
                                 foreach (var card7 in cards7)
                                     foreach (var card8 in cards8)
                                     {
-                                        if (timeCounter.Second > 1)
+                                        if (timeCounter.Second > 1.0f / 30.0f)
                                         {
                                             
 
@@ -109,9 +103,10 @@ public class Core : MonoBehaviour
 
                                             suits = orders.ToList();
 
-                                            if (suits.Count > 100)
-                                                suits.RemoveRange(0, suits.Count - 100);
+                                            if (suits.Count > 30)
+                                                suits.RemoveRange(0, suits.Count - 30);
 
+                                            yield return new WaitForEndOfFrame();
                                         }
 
                                         var s = new Suit(card1, card2, card3, card4, card5, card6, card7, card8);
@@ -122,8 +117,8 @@ public class Core : MonoBehaviour
 
                                         if (pass)
                                             suits.Add(s);
-                                        count++;
-                                        yield return new WaitForEndOfFrame();
+                                        CalculationCount++;
+                                        
                                     }
         var result = suits.OrderByDescending((suit) => suit.GetValue(propertys[0]));
         foreach (var property in propertys.Skip(1))
@@ -143,4 +138,34 @@ public class Core : MonoBehaviour
     }
 
 
+
+    internal IEnumerable<string> GetSuitNames()
+    {
+        return BladeAndSoulGossipCards.CardSet.Instance.GetSuitNames();
+    }
+
+    internal BladeAndSoulGossipCards.Card[] GetAllCards()
+    {
+        return BladeAndSoulGossipCards.CardSet.Instance.Cards;
+    }
+    Card[] _Cards;
+    internal void SetEnableCards(IEnumerable<Card> cards)
+    {
+        _Cards = cards.ToArray();
+    }
+
+    internal IEnumerable<PROPERTY_TYPE> GetPropertys()
+    {
+        foreach (PROPERTY_TYPE t in System.Enum.GetValues(typeof(PROPERTY_TYPE)))
+        {
+            yield return t;
+        }
+        yield break;
+    }
+
+    public System.Int64 CalculationCount { get; private set; }
+
+    public System.Int64 CalculationAmount { get; private set; }
+
+    public IEnumerable<Card> Cards { get { return _Cards; } }
 }
